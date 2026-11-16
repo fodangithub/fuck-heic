@@ -83,9 +83,18 @@
                                      HorizontalAlignment="Stretch"
                                      SnapsToDevicePixels="True"/>
 
-                            <!-- Drop-down arrow -->
-                            <Path Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#FFBBBBBB"/>
+                            <!-- Drop-down arrow — a ToggleButton so clicking it opens the list -->
+                            <ToggleButton Grid.Column="1" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent">
+                                            <Path HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#FFBBBBBB"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
 
                             <!-- Drop-down list -->
                             <Popup x:Name="PART_Popup" Grid.ColumnSpan="2"

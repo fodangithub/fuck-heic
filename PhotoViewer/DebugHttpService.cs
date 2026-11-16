@@ -246,6 +246,15 @@ public sealed class DebugHttpService : IDisposable
             case "/pause":
                 if (post) { _window.StopAutoPlay(); return Json(_window.GetDebugInfo()); }
                 break;
+
+            // Test-only: open/close the zoom drop-down so the template wiring can be verified.
+            case "/debug/dropdown":
+                if (post)
+                {
+                    _window.SetZoomDropdownOpen(Num(query, "open", 1) != 0);
+                    return Json(_window.GetDebugInfo());
+                }
+                break;
         }
 
         return JsonError($"Unknown endpoint: {method} {path}");

@@ -107,9 +107,16 @@ public partial class MainWindow : Window
         _source = bmp;
         _rotation = 0;
         _pan = new Point(0, 0);
+        // The Image element stays at the ORIGINAL pixel size and never grows with zoom;
+        // zooming is done via ScaleTransform (clipped before rasterization), which avoids
+        // WPF's unreliable rendering of giant layout elements when panned at high zoom.
+        ImageHost.Width = bmp.PixelWidth;
+        ImageHost.Height = bmp.PixelHeight;
         RotateTransform.Angle = 0;
         PanTransform.X = 0;
         PanTransform.Y = 0;
+        ZoomTransform.ScaleX = 1;
+        ZoomTransform.ScaleY = 1;
         ImageHost.Source = bmp;
         // Recompute fit after layout has the new intrinsic size.
         Dispatcher.BeginInvoke(() => FitToWindow(), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -182,21 +189,23 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Zoom is expressed as the on-screen size of the image element. Sizing the
-    /// element (rather than using a giant Stretch=None element with a ScaleTransform)
-    /// avoids the oversized-rasterization clipping that cropped large photos.
+    /// Zoom is a ScaleTransform (about the image center) on an element kept at the original
+    /// pixel size. Because render transforms are clipped before rasterization, only the
+    /// visible viewport region is drawn — so high zoom + pan stays correct and fast.
     /// </summary>
-    private void ApplyDisplaySize()
+    private void ApplyTransforms()
     {
-        if (_source is null) return;
-        ImageHost.Width = _source.PixelWidth * _zoom;
-        ImageHost.Height = _source.PixelHeight * _zoom;
+        ZoomTransform.ScaleX = _zoom;
+        ZoomTransform.ScaleY = _zoom;
+        PanTransform.X = _pan.X;
+        PanTransform.Y = _pan.Y;
+        RotateTransform.Angle = _rotation;
     }
 
     private void SetZoom(double value)
     {
         _zoom = Math.Clamp(value, 0.02, 40.0);
-        ApplyDisplaySize();
+        ApplyTransforms();
         string percent = $"{Math.Round(_zoom * 100)}%";
         ZoomText.Text = percent;
         // Keep the toolbar combo in sync without re-triggering its handlers.
@@ -381,6 +390,9 @@ public partial class MainWindow : Window
     /// <summary>Rotate by a relative number of degrees.</summary>
     public void RotateBy(double degrees) => Rotate(degrees);
 
+    /// <summary>Test hook: open/close the zoom drop-down programmatically.</summary>
+    public void SetZoomDropdownOpen(bool open) => ZoomBox.IsDropDownOpen = open;
+
     /// <summary>
     /// Snapshot of image + UI geometry for the Debug HTTP service and tests.
     /// Must be called on the UI thread.
@@ -408,7 +420,9 @@ public partial class MainWindow : Window
             rotation = _rotation,
             pan = new { x = _pan.X, y = _pan.Y },
             isAutoPlaying = IsAutoPlaying,
-            autoPlayIntervalSeconds = AutoPlayIntervalSeconds
+            autoPlayIntervalSeconds = AutoPlayIntervalSeconds,
+            zoomDropdownOpen = ZoomBox.IsDropDownOpen,
+            zoomItems = ZoomBox.Items.Count
         };
     }
 

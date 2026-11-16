@@ -56,6 +56,7 @@
                        Cursor="SizeAll">
                     <Image.RenderTransform>
                         <TransformGroup>
+                            <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1"/>
                             <RotateTransform x:Name="RotateTransform" Angle="0"/>
                             <TranslateTransform x:Name="PanTransform" X="0" Y="0"/>
                         </TransformGroup>
