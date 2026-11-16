@@ -10,9 +10,41 @@
         PreviewKeyDown="Window_PreviewKeyDown"
         SizeChanged="Window_SizeChanged">
 
+    <Window.Resources>
+        <!-- Dark toolbar button -->
+        <Style x:Key="ToolButton" TargetType="Button">
+            <Setter Property="Background" Value="#FF3A3A3A"/>
+            <Setter Property="Foreground" Value="#FFEEEEEE"/>
+            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- Dark text box -->
+        <Style x:Key="ToolTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#FF252525"/>
+            <Setter Property="Foreground" Value="#FFEEEEEE"/>
+            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="CaretBrush" Value="#FFEEEEEE"/>
+            <Setter Property="Padding" Value="3,2"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- Dark combo (editable) -->
+        <Style x:Key="ToolCombo" TargetType="ComboBox">
+            <Setter Property="Background" Value="#FF252525"/>
+            <Setter Property="Foreground" Value="#FFEEEEEE"/>
+            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="Padding" Value="3,2"/>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -48,10 +80,66 @@
             </Grid>
         </Border>
 
+        <!-- Toolbar (lower center) -->
+        <Border Grid.Row="1" Background="#FF2B2B2B" Padding="8,6"
+                BorderBrush="#FF3C3C3C" BorderThickness="0,1,0,1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+
+                <!-- Navigation group -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="PrevButton" Content="&#9664;  Prev"
+                            Style="{StaticResource ToolButton}" Click="PrevButton_Click"
+                            ToolTip="Previous image (Left)"/>
+                    <Button x:Name="NextButton" Content="Next  &#9654;"
+                            Style="{StaticResource ToolButton}" Click="NextButton_Click"
+                            ToolTip="Next image (Right)"/>
+                    <Button x:Name="PlayButton" Content="&#9654;  Play"
+                            Style="{StaticResource ToolButton}" MinWidth="86" Click="PlayButton_Click"
+                            ToolTip="Auto-play / pause (Space)"/>
+                    <TextBlock Text="Interval (s):" VerticalAlignment="Center"
+                               Foreground="#FFAAAAAA" Margin="8,0,4,0"/>
+                    <TextBox x:Name="IntervalBox" Style="{StaticResource ToolTextBox}" Width="48"
+                             Text="2.5" ToolTip="Auto-play interval in seconds (Enter to apply)"/>
+                </StackPanel>
+
+                <Border Width="1" Background="#FF444444" Margin="14,2,14,2"/>
+
+                <!-- Zoom group -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="ZoomOutButton" Content="&#8722;"
+                            Style="{StaticResource ToolButton}" MinWidth="30" Click="ZoomOutButton_Click"
+                            ToolTip="Zoom out (-)"/>
+                    <Button x:Name="ZoomInButton" Content="+"
+                            Style="{StaticResource ToolButton}" MinWidth="30" Click="ZoomInButton_Click"
+                            ToolTip="Zoom in (+)"/>
+                    <ComboBox x:Name="ZoomBox" Style="{StaticResource ToolCombo}" Width="74"
+                              IsEditable="True" Margin="0,0,6,0"
+                              ToolTip="Zoom scale (%) — pick a preset or type a number and press Enter"
+                              SelectionChanged="ZoomBox_SelectionChanged"
+                              PreviewKeyDown="ZoomBox_PreviewKeyDown">
+                        <ComboBoxItem Content="25%"/>
+                        <ComboBoxItem Content="50%"/>
+                        <ComboBoxItem Content="100%"/>
+                        <ComboBoxItem Content="200%"/>
+                        <ComboBoxItem Content="400%"/>
+                    </ComboBox>
+                    <Button x:Name="FitButton" Content="Fit window"
+                            Style="{StaticResource ToolButton}" Click="FitButton_Click"
+                            ToolTip="Fit to window (F)"/>
+                    <Button x:Name="OriginalButton" Content="Original"
+                            Style="{StaticResource ToolButton}" Click="OriginalButton_Click"
+                            ToolTip="Original size — 100% (1)"/>
+                    <Button x:Name="ResetButton" Content="Reset"
+                            Style="{StaticResource ToolButton}" Click="ResetButton_Click"
+                            ToolTip="Reset position, size and rotation"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Status bar -->
-        <Border Grid.Row="1" Background="#FF2B2B2B" Padding="10,6">
+        <Border Grid.Row="2" Background="#FF222222" Padding="10,5">
             <DockPanel>
-                <TextBlock x:Name="StatusText" Foreground="#FFDDDDDD" FontSize="12"
+                <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB" FontSize="12"
                            DockPanel.Dock="Left" Text="Ready"/>
                 <TextBlock x:Name="ZoomText" Foreground="#FF9A9A9A" FontSize="12"
                            DockPanel.Dock="Right" HorizontalAlignment="Right" Text="100%"/>

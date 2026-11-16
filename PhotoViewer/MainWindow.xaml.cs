@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
@@ -10,7 +11,10 @@ public partial class MainWindow : Window
 {
     private readonly FolderNavigator _nav = new();
     private readonly ImagePreloader _preloader = new();
+    private readonly AppSettings _settings;
+    private readonly System.Windows.Threading.DispatcherTimer _autoPlayTimer;
     private int _loadGeneration;      // guards against out-of-order async navigation
+    private bool _updatingZoomUi;     // suppress combo events while we set the text in code
     private BitmapSource? _source;
     private double _zoom = 1.0;
     private double _fitZoom = 1.0;
@@ -21,9 +25,24 @@ public partial class MainWindow : Window
     private Point _panOrigin;
     private bool _isDragging;
 
+    /// <summary>Port the Debug HTTP control service listens on (Debug builds only).</summary>
+    public int DebugPort => _settings.DebugHttpPort;
+
     public MainWindow()
     {
         InitializeComponent();
+
+        _settings = AppSettings.Load();
+        IntervalBox.Text = _settings.AutoPlayIntervalSeconds.ToString("0.##");
+
+        _autoPlayTimer = new System.Windows.Threading.DispatcherTimer();
+        _autoPlayTimer.Tick += (_, _) => Next();
+
+        IntervalBox.LostFocus += (_, _) => ApplyIntervalFromBox();
+        IntervalBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { ApplyIntervalFromBox(); e.Handled = true; }
+        };
 
         var openBinding = new KeyBinding(
             new RelayCommand(_ => OpenExecuted()),
@@ -178,7 +197,12 @@ public partial class MainWindow : Window
     {
         _zoom = Math.Clamp(value, 0.02, 40.0);
         ApplyDisplaySize();
-        ZoomText.Text = $"{Math.Round(_zoom * 100)}%";
+        string percent = $"{Math.Round(_zoom * 100)}%";
+        ZoomText.Text = percent;
+        // Keep the toolbar combo in sync without re-triggering its handlers.
+        _updatingZoomUi = true;
+        ZoomBox.Text = percent;
+        _updatingZoomUi = false;
     }
 
     private void ZoomAt(double factor, Point p)
@@ -225,6 +249,169 @@ public partial class MainWindow : Window
         if (_isFit) FitToWindow();
     }
 
+    // ---------- Toolbar: navigation + auto-play ----------
+    private void PrevButton_Click(object sender, RoutedEventArgs e) => NavigatePrevious();
+    private void NextButton_Click(object sender, RoutedEventArgs e) => NavigateNext();
+
+    private void PlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (IsAutoPlaying) StopAutoPlay(); else StartAutoPlay();
+    }
+
+    /// <summary>Parse the interval box and persist it; restart the timer if running.</summary>
+    private void ApplyIntervalFromBox()
+    {
+        if (double.TryParse(IntervalBox.Text.Trim(), out double seconds) && seconds > 0)
+        {
+            _settings.AutoPlayIntervalSeconds = seconds;
+            _settings.Save();
+            if (IsAutoPlaying)
+                _autoPlayTimer.Interval = TimeSpan.FromSeconds(_settings.IntervalSecondsClamped);
+        }
+        else
+        {
+            // Restore the box to the last valid value.
+            IntervalBox.Text = _settings.AutoPlayIntervalSeconds.ToString("0.##");
+        }
+    }
+
+    public bool IsAutoPlaying => _autoPlayTimer.IsEnabled;
+
+    /// <summary>Current auto-play interval in seconds (as persisted/clamped).</summary>
+    public double AutoPlayIntervalSeconds => _settings.IntervalSecondsClamped;
+
+    /// <summary>Start auto-play, optionally overriding the interval in seconds.</summary>
+    public void StartAutoPlay(double? intervalSeconds = null)
+    {
+        if (intervalSeconds is double s && s > 0)
+        {
+            _settings.AutoPlayIntervalSeconds = s;
+            IntervalBox.Text = s.ToString("0.##");
+            _settings.Save();
+        }
+        _autoPlayTimer.Interval = TimeSpan.FromSeconds(_settings.IntervalSecondsClamped);
+        _autoPlayTimer.Start();
+        PlayButton.Content = "\u23F8  Pause";
+    }
+
+    public void StopAutoPlay()
+    {
+        _autoPlayTimer.Stop();
+        PlayButton.Content = "\u25B6  Play";
+    }
+
+    // ---------- Toolbar: zoom ----------
+    private Point ViewportCenter() => new(Viewport.ActualWidth / 2, Viewport.ActualHeight / 2);
+
+    private void ZoomInButton_Click(object sender, RoutedEventArgs e) => ZoomStep(1.25);
+    private void ZoomOutButton_Click(object sender, RoutedEventArgs e) => ZoomStep(1 / 1.25);
+    private void FitButton_Click(object sender, RoutedEventArgs e) => FitWindow();
+    private void OriginalButton_Click(object sender, RoutedEventArgs e) => ShowOriginal();
+    private void ResetButton_Click(object sender, RoutedEventArgs e) => ResetView();
+
+    private void ZoomBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            ApplyZoomFromBox();
+            e.Handled = true;
+        }
+    }
+
+    private void ZoomBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_updatingZoomUi) return;
+        ApplyZoomFromBox();
+    }
+
+    /// <summary>Apply the zoom percentage typed/chosen in the combo, anchored at the viewport center.</summary>
+    private void ApplyZoomFromBox()
+    {
+        string text = ZoomBox.Text.Trim().TrimEnd('%').Trim();
+        if (double.TryParse(text, out double percent) && percent > 0)
+            ZoomToScale(percent / 100.0);
+        else
+            SetZoom(_zoom);   // restore current value in the box
+    }
+
+    // ---------- Public command API (used by toolbar and the Debug HTTP service) ----------
+    public void NavigateNext() => Next();
+    public void NavigatePrevious() => Previous();
+
+    /// <summary>Zoom to an absolute scale (1.0 = original pixels), anchored at the viewport center.</summary>
+    public void ZoomToScale(double scale)
+    {
+        double target = Math.Clamp(scale, 0.02, 40.0);
+        ZoomAt(target / Math.Max(_zoom, 1e-9), ViewportCenter());
+    }
+
+    /// <summary>Zoom by a multiplicative step (e.g. 1.25 to zoom in), anchored at the viewport center.</summary>
+    public void ZoomStep(double factor) => ZoomAt(factor, ViewportCenter());
+
+    /// <summary>Pan the image by a relative offset in device pixels (positive dx = right, dy = down).</summary>
+    public void PanBy(double dx, double dy)
+    {
+        _pan = new Point(_pan.X + dx, _pan.Y + dy);
+        PanTransform.X = _pan.X;
+        PanTransform.Y = _pan.Y;
+        _isFit = false;
+    }
+
+    /// <summary>Fit the image to the window (never above 100%).</summary>
+    public void FitWindow() => FitToWindow();
+
+    /// <summary>Show the image at original size (100%), centered.</summary>
+    public void ShowOriginal()
+    {
+        _pan = new Point(0, 0);
+        PanTransform.X = 0;
+        PanTransform.Y = 0;
+        SetZoom(1.0);
+        _isFit = false;
+    }
+
+    /// <summary>Reset position, size and rotation back to the freshly-opened (fit) state.</summary>
+    public void ResetView()
+    {
+        _rotation = 0;
+        RotateTransform.Angle = 0;
+        FitToWindow();
+    }
+
+    /// <summary>Rotate by a relative number of degrees.</summary>
+    public void RotateBy(double degrees) => Rotate(degrees);
+
+    /// <summary>
+    /// Snapshot of image + UI geometry for the Debug HTTP service and tests.
+    /// Must be called on the UI thread.
+    /// </summary>
+    public object GetDebugInfo()
+    {
+        return new
+        {
+            file = _nav.Current,
+            index = _nav.Index,
+            count = _nav.Count,
+            image = _source is null
+                ? null
+                : new { pixelWidth = _source.PixelWidth, pixelHeight = _source.PixelHeight },
+            viewport = new { width = Viewport.ActualWidth, height = Viewport.ActualHeight },
+            // Intended display size (pixel size x zoom). Reported directly rather than
+            // ImageHost.ActualWidth, which lags because WPF layout is deferred and would
+            // otherwise return a stale value when read synchronously right after a zoom.
+            imageElement = _source is null
+                ? null
+                : new { width = _source.PixelWidth * _zoom, height = _source.PixelHeight * _zoom },
+            zoom = _zoom,
+            zoomPercent = Math.Round(_zoom * 100, 2),
+            fitZoom = _fitZoom,
+            rotation = _rotation,
+            pan = new { x = _pan.X, y = _pan.Y },
+            isAutoPlaying = IsAutoPlaying,
+            autoPlayIntervalSeconds = AutoPlayIntervalSeconds
+        };
+    }
+
     // ---------- Events ----------
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -236,6 +423,8 @@ public partial class MainWindow : Window
         else if (e.Key == Key.D1) { SetZoom(1.0); _isFit = false; e.Handled = true; }
         else if (e.Key == Key.OemPlus || e.Key == Key.Add) { SetZoom(_zoom * 1.25); _isFit = false; e.Handled = true; }
         else if (e.Key == Key.OemMinus || e.Key == Key.Subtract) { SetZoom(_zoom / 1.25); _isFit = false; e.Handled = true; }
+        else if (e.Key == Key.Space && Keyboard.FocusedElement is not TextBox && Keyboard.FocusedElement is not ComboBox)
+        { if (IsAutoPlaying) StopAutoPlay(); else StartAutoPlay(); e.Handled = true; }
     }
 
     private void ImageHost_MouseWheel(object sender, MouseWheelEventArgs e)
