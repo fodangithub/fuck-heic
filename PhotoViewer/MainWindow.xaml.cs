@@ -129,11 +129,22 @@ public partial class MainWindow : Window
         _isFit = true;
     }
 
+    /// <summary>
+    /// Zoom is expressed as the on-screen size of the image element. Sizing the
+    /// element (rather than using a giant Stretch=None element with a ScaleTransform)
+    /// avoids the oversized-rasterization clipping that cropped large photos.
+    /// </summary>
+    private void ApplyDisplaySize()
+    {
+        if (_source is null) return;
+        ImageHost.Width = _source.PixelWidth * _zoom;
+        ImageHost.Height = _source.PixelHeight * _zoom;
+    }
+
     private void SetZoom(double value)
     {
         _zoom = Math.Clamp(value, 0.02, 40.0);
-        ZoomTransform.ScaleX = _zoom;
-        ZoomTransform.ScaleY = _zoom;
+        ApplyDisplaySize();
         ZoomText.Text = $"{Math.Round(_zoom * 100)}%";
     }
 
@@ -143,8 +154,8 @@ public partial class MainWindow : Window
         double newZoom = Math.Clamp(old * factor, 0.02, 40.0);
         if (Math.Abs(newZoom - old) < 1e-9) return;
 
-        // Keep the image point under the cursor fixed while scaling. With the
-        // transform origin at the image center, the rotation cancels out:
+        // Keep the image point under the cursor fixed while scaling. With the image
+        // centered (and rotation applied about its center), the rotation cancels:
         //   newPan = d - k*(d - pan),  where d = p - viewportCenter, k = newZoom/old.
         double cx = Viewport.ActualWidth / 2;
         double cy = Viewport.ActualHeight / 2;

@@ -9,6 +9,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         var window = new MainWindow();
+        MainWindow = window;          // required for ShutdownMode=OnMainWindowClose
         window.OpenFromArgs(e.Args);
         window.Show();
     }
