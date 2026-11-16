@@ -1,10 +1,13 @@
 #if DEBUG
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PhotoViewer;
 
@@ -63,6 +66,14 @@ public sealed class DebugHttpService : IDisposable
             var request = await ReadRequestAsync(stream, ct);
             if (request is null) return;
 
+            // /screenshot renders the UI to PNG (useful for visual regression checks).
+            if (request.Value.path.TrimEnd('/').Equals("/screenshot", StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] png = await _window.Dispatcher.InvokeAsync(RenderWindowPng).Task;
+                await WriteBytesAsync(stream, "image/png", png, ct);
+                return;
+            }
+
             string body;
             try
             {
@@ -77,6 +88,23 @@ public sealed class DebugHttpService : IDisposable
 
             await WriteResponseAsync(stream, body, ct);
         }
+    }
+
+    /// <summary>Render the main window's visual tree to PNG bytes (UI-thread only).</summary>
+    private byte[] RenderWindowPng()
+    {
+        _window.UpdateLayout();
+        int w = (int)Math.Ceiling(_window.ActualWidth);
+        int h = (int)Math.Ceiling(_window.ActualHeight);
+        if (w <= 0 || h <= 0) return Array.Empty<byte>();
+
+        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(_window);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
     }
 
     private static async Task<(string method, string path, Dictionary<string, string> query)?> ReadRequestAsync(
@@ -132,9 +160,14 @@ public sealed class DebugHttpService : IDisposable
     private static async Task WriteResponseAsync(NetworkStream stream, string body, CancellationToken ct)
     {
         byte[] payload = Encoding.UTF8.GetBytes(body);
+        await WriteBytesAsync(stream, "application/json; charset=utf-8", payload, ct);
+    }
+
+    private static async Task WriteBytesAsync(NetworkStream stream, string contentType, byte[] payload, CancellationToken ct)
+    {
         string head =
             "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: application/json; charset=utf-8\r\n" +
+            $"Content-Type: {contentType}\r\n" +
             $"Content-Length: {payload.Length}\r\n" +
             "Connection: close\r\n\r\n";
         await stream.WriteAsync(Encoding.ASCII.GetBytes(head), ct);

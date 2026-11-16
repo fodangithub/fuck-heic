@@ -32,13 +32,6 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
         </Style>
-        <!-- Dark combo (editable) -->
-        <Style x:Key="ToolCombo" TargetType="ComboBox">
-            <Setter Property="Background" Value="#FF252525"/>
-            <Setter Property="Foreground" Value="#FFEEEEEE"/>
-            <Setter Property="BorderBrush" Value="#FF555555"/>
-            <Setter Property="Padding" Value="3,2"/>
-        </Style>
     </Window.Resources>
 
     <Grid>
@@ -112,7 +105,7 @@
                     <Button x:Name="ZoomInButton" Content="+"
                             Style="{StaticResource ToolButton}" MinWidth="30" Click="ZoomInButton_Click"
                             ToolTip="Zoom in (+)"/>
-                    <ComboBox x:Name="ZoomBox" Style="{StaticResource ToolCombo}" Width="74"
+                    <ComboBox x:Name="ZoomBox" Style="{StaticResource DarkComboBox}" Width="74"
                               IsEditable="True" Margin="0,0,6,0"
                               ToolTip="Zoom scale (%) — pick a preset or type a number and press Enter"
                               SelectionChanged="ZoomBox_SelectionChanged"

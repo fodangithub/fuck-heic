@@ -5,5 +5,117 @@
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
 
+        <!--
+            Dark-theme ComboBox (supports IsEditable). WPF's built-in ComboBox template is
+            hardcoded light, which clashed with the app's dark toolbar. This re-templates the
+            box, the drop-down popup, and the items so the whole control is dark and readable.
+        -->
+        <Style x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FFEEEEEE"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF3D5A78"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF4A6785"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkComboBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#FFEEEEEE"/>
+            <Setter Property="Background" Value="#FF252525"/>
+            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="18"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Box border/background -->
+                            <Border Grid.ColumnSpan="2" x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="2"/>
+
+                            <!-- Selected item (non-editable mode) -->
+                            <ContentPresenter x:Name="ContentSite" Grid.Column="0"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              IsHitTestVisible="False"/>
+
+                            <!-- Editable text area -->
+                            <TextBox x:Name="PART_EditableTextBox" Grid.Column="0"
+                                     Margin="{TemplateBinding Padding}"
+                                     Background="Transparent"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     CaretBrush="{TemplateBinding Foreground}"
+                                     BorderThickness="0"
+                                     VerticalAlignment="Center"
+                                     HorizontalAlignment="Stretch"
+                                     SnapsToDevicePixels="True"/>
+
+                            <!-- Drop-down arrow -->
+                            <Path Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#FFBBBBBB"/>
+
+                            <!-- Drop-down list -->
+                            <Popup x:Name="PART_Popup" Grid.ColumnSpan="2"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom" AllowsTransparency="True"
+                                   PopupAnimation="Fade" Focusable="False">
+                                <Border Background="#FF2B2B2B" BorderBrush="#FF5A5A5A"
+                                        BorderThickness="1" CornerRadius="2" Margin="0,2,0,0">
+                                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#FF7A7A7A"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#FF7A7A7A"/>
+                                <Setter TargetName="Border" Property="Background" Value="#FF2B2B2B"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>
