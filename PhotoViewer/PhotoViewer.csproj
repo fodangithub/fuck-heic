@@ -7,20 +7,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
 
-    <!-- Single-file self-contained executable -->
+    <!-- Folder layout (single-file dropped: native libheif.dll didn't self-extract reliably) -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
-    <!-- Fold native libheif.dll into the single-file bundle and extract at startup -->
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>PhotoViewer</AssemblyName>
     <RootNamespace>PhotoViewer</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="LibHeif.Native.Runtime" Version="1.20.2">
@@ -29,5 +29,13 @@
     </PackageReference>
     <PackageReference Include="LibHeifSharp" Version="3.2.0" />
   </ItemGroup>
+
+  <!-- publish drops the native libheif.dll (PrivateAssets native pkg quirk); copy it explicitly -->
+  <Target Name="CopyNativeLibheif" AfterTargets="Publish">
+    <ItemGroup>
+      <_libheif Include="$(OutputPath)libheif.dll" Condition="Exists('$(OutputPath)libheif.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_libheif)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

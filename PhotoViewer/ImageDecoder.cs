@@ -63,8 +63,11 @@ public static class ImageDecoder
 
     private static BitmapSource DecodeHeif(string path)
     {
-        // Decode with transformations applied (EXIF orientation handled by libheif).
-        using var context = new HeifContext(path);
+        // Some iPhone HEICs carry an HDR gain-map as a movie-sequence track that
+        // libheif's still-image parser rejects. Strip those boxes in memory first.
+        byte[] sanitized = HeicSanitizer.Sanitize(path);
+
+        using var context = new HeifContext(sanitized);
         using var handle = context.GetPrimaryImageHandle();
         using var image = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32, null);
 
