@@ -14,7 +14,10 @@ public partial class MainWindow : Window
     private double _fitZoom = 1.0;
     private bool _isFit = true;       // fit-to-window when a new image loads
     private double _rotation;         // accumulated degrees (0/90/180/270)
+    private Point _pan;               // pan offset in device pixels (applied via PanTransform)
     private Point _dragOrigin;
+    private Point _panOrigin;
+    private bool _isDragging;
 
     public MainWindow()
     {
@@ -24,6 +27,17 @@ public partial class MainWindow : Window
             new RelayCommand(_ => OpenExecuted()),
             Key.O, ModifierKeys.Control);
         InputBindings.Add(openBinding);
+    }
+
+    /// <summary>
+    /// Fit once the window has actually been rendered. Fixes the case where an
+    /// image is opened from the command line before layout has run — without this
+    /// FitToWindow sees a zero-size viewport and leaves the image at 100% (cropped).
+    /// </summary>
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        if (_isFit) FitToWindow();
     }
 
     /// <summary>Open a file passed on the command line, if any.</summary>
@@ -69,7 +83,10 @@ public partial class MainWindow : Window
     {
         _source = bmp;
         _rotation = 0;
+        _pan = new Point(0, 0);
         RotateTransform.Angle = 0;
+        PanTransform.X = 0;
+        PanTransform.Y = 0;
         ImageHost.Source = bmp;
         // Recompute fit after layout has the new intrinsic size.
         Dispatcher.BeginInvoke(() => FitToWindow(), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -104,6 +121,10 @@ public partial class MainWindow : Window
         _fitZoom = Math.Min(scaleX, scaleY);
         _fitZoom = Math.Min(_fitZoom, 1.0); // never upscale beyond 100% on fit
 
+        // Reset pan so the fitted image is centered.
+        _pan = new Point(0, 0);
+        PanTransform.X = 0;
+        PanTransform.Y = 0;
         SetZoom(_fitZoom);
         _isFit = true;
     }
@@ -116,22 +137,25 @@ public partial class MainWindow : Window
         ZoomText.Text = $"{Math.Round(_zoom * 100)}%";
     }
 
-    private void ZoomAt(double factor, Point centerInViewport)
+    private void ZoomAt(double factor, Point p)
     {
         double old = _zoom;
         double newZoom = Math.Clamp(old * factor, 0.02, 40.0);
         if (Math.Abs(newZoom - old) < 1e-9) return;
 
-        // Keep the point under the cursor stable while scaling.
+        // Keep the image point under the cursor fixed while scaling. With the
+        // transform origin at the image center, the rotation cancels out:
+        //   newPan = d - k*(d - pan),  where d = p - viewportCenter, k = newZoom/old.
         double cx = Viewport.ActualWidth / 2;
         double cy = Viewport.ActualHeight / 2;
-        double dx = centerInViewport.X - cx;
-        double dy = centerInViewport.Y - cy;
+        double dx = p.X - cx;
+        double dy = p.Y - cy;
+        double k = newZoom / old;
 
-        ImageHost.RenderTransformOrigin = new Point(0.5, 0.5);
+        _pan = new Point(dx - k * (dx - _pan.X), dy - k * (dy - _pan.Y));
+        PanTransform.X = _pan.X;
+        PanTransform.Y = _pan.Y;
         SetZoom(newZoom);
-
-        // Adjust a translate to compensate — kept simple via origin-based scaling.
         _isFit = false;
     }
 
@@ -179,18 +203,26 @@ public partial class MainWindow : Window
 
     private void ImageHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        _isDragging = true;
         _dragOrigin = e.GetPosition(this);
+        _panOrigin = _pan;
         ImageHost.CaptureMouse();
     }
 
     private void ImageHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        _isDragging = false;
         ImageHost.ReleaseMouseCapture();
     }
 
     private void ImageHost_MouseMove(object sender, MouseEventArgs e)
     {
-        // Panning is handled naturally by ScrollViewer-free centering; keep cursor feedback only.
+        if (!_isDragging) return;
+        var pos = e.GetPosition(this);
+        _pan = new Point(_panOrigin.X + (pos.X - _dragOrigin.X),
+                         _panOrigin.Y + (pos.Y - _dragOrigin.Y));
+        PanTransform.X = _pan.X;
+        PanTransform.Y = _pan.Y;
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e)

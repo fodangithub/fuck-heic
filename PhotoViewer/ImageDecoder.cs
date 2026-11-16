@@ -89,6 +89,13 @@ public static class ImageDecoder
             Marshal.Copy(rowSrc, buffer, y * width * bytesPerPixel, width * bytesPerPixel);
         }
 
+        // libheif emits bytes as R,G,B,A, but WPF's Bgra32 reads B,G,R,A.
+        // Swap the red and blue channels in place so colors are correct.
+        for (int i = 0; i < buffer.Length; i += 4)
+        {
+            (buffer[i], buffer[i + 2]) = (buffer[i + 2], buffer[i]);
+        }
+
         var bmp = BitmapSource.Create(
             width, height, 96, 96,
             PixelFormats.Bgra32, null, buffer, width * bytesPerPixel);
