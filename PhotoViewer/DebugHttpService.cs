@@ -220,6 +220,24 @@ public sealed class DebugHttpService : IDisposable
                 if (post) { _window.NavigatePrevious(); return Json(_window.GetDebugInfo()); }
                 break;
 
+            // Open an arbitrary file — same code path as Ctrl+O / drag-drop, so tests
+            // can verify the fit-on-open behaviour after the window is already shown.
+            case "/open":
+                if (post)
+                {
+                    if (query.TryGetValue("path", out string? op) && !string.IsNullOrEmpty(op))
+                    {
+                        if (File.Exists(op))
+                        {
+                            _window.OpenPath(op);
+                            return Json(_window.GetDebugInfo());
+                        }
+                        return JsonError($"File not found: {op}");
+                    }
+                    return JsonError("Missing 'path' query parameter");
+                }
+                break;
+
             case "/fit":
                 if (post) { _window.FitWindow(); return Json(_window.GetDebugInfo()); }
                 break;

@@ -68,6 +68,9 @@ public partial class MainWindow : Window
             LoadFile(args[0]);
     }
 
+    /// <summary>Open a file programmatically (Debug HTTP service / tests). Same path as Ctrl+O and drag-drop.</summary>
+    public void OpenPath(string path) => LoadFile(path);
+
     // ---------- Commands ----------
     private void OpenExecuted()
     {
@@ -117,9 +120,27 @@ public partial class MainWindow : Window
         PanTransform.Y = 0;
         ZoomTransform.ScaleX = 1;
         ZoomTransform.ScaleY = 1;
+        // Keep the zoom model in sync with the reset transform. Leaving the previous
+        // image's zoom here (e.g. 300%) made the next image render cropped until a
+        // deferred fit caught up — a large photo showed only a small middle portion.
+        _zoom = 1.0;
         ImageHost.Source = bmp;
-        // Recompute fit after layout has the new intrinsic size.
-        Dispatcher.BeginInvoke(() => FitToWindow(), System.Windows.Threading.DispatcherPriority.Loaded);
+
+        if (Viewport.ActualWidth > 0 && Viewport.ActualHeight > 0)
+        {
+            // Viewport already measured (opened after startup): fit synchronously so
+            // the image is never displayed at 100% or a stale zoom.
+            FitToWindow();
+        }
+        else
+        {
+            // Startup before the first layout: keep the image hidden until the fit has
+            // been applied, so no un-fitted frame is ever shown.
+            _isFit = true;
+            ImageHost.Visibility = Visibility.Hidden;
+            Dispatcher.BeginInvoke(new Action(FitToWindow),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
     }
 
     /// <summary>
@@ -169,7 +190,18 @@ public partial class MainWindow : Window
     // ---------- Fit / zoom ----------
     private void FitToWindow()
     {
-        if (_source is null || Viewport.ActualWidth <= 0 || Viewport.ActualHeight <= 0) return;
+        if (_source is null) return;
+
+        if (Viewport.ActualWidth <= 0 || Viewport.ActualHeight <= 0)
+        {
+            // Layout hasn't run yet (startup). Retry once it has instead of leaving
+            // the image at 100%, which would show only a small middle portion of a
+            // large photo.
+            if (IsVisible)
+                Dispatcher.BeginInvoke(new Action(FitToWindow),
+                    System.Windows.Threading.DispatcherPriority.Loaded);
+            return;
+        }
 
         bool rotated = Math.Abs(_rotation % 180) > 0.01;
         double iw = rotated ? _source.PixelHeight : _source.PixelWidth;
@@ -186,6 +218,8 @@ public partial class MainWindow : Window
         PanTransform.Y = 0;
         SetZoom(_fitZoom);
         _isFit = true;
+        // The image may have been hidden while waiting for the first fit (startup).
+        ImageHost.Visibility = Visibility.Visible;
     }
 
     /// <summary>

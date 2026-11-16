@@ -35,12 +35,17 @@ public sealed class FolderNavigator
             return;
         }
 
+        // Normalize both sides: the command line may hand us "F:/tmp/x.heic" while
+        // directory enumeration returns "F:\tmp\x.heic" — without this the file gets
+        // inserted a second time and appears twice in the navigator.
+        string full = Path.GetFullPath(path);
         _files = Directory.EnumerateFiles(dir)
             .Where(ImageDecoder.IsSupported)
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        _index = _files.FindIndex(f => string.Equals(f, path, StringComparison.OrdinalIgnoreCase));
+        _index = _files.FindIndex(f =>
+            string.Equals(Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase));
         if (_index < 0)
         {
             // File may have been filtered out (unknown ext); still show it.

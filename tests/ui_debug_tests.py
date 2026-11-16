@@ -11,10 +11,12 @@ It drives the UI over http://127.0.0.1:<port> and asserts on the reported state.
 Requires: Python 3.7+ (stdlib only).
 """
 import json
+import os
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8321
 BASE = f"http://127.0.0.1:{PORT}"
@@ -56,6 +58,24 @@ def approx(a, b, tol):
 def settle(delay=0.6):
     """Give the UI a moment to apply layout after an action."""
     time.sleep(delay)
+
+
+def nav_next_and_wait(timeout=6.0):
+    """Navigate forward and wait until /info reports a different file.
+
+    Decoding may happen on a background thread, so the POST response can lag;
+    poll until the file actually changes (or the timeout expires).
+    """
+    before = get("/info")["file"]
+    post("/nav/next")
+    deadline = time.time() + timeout
+    last = None
+    while time.time() < deadline:
+        last = get("/info")
+        if last.get("file") != before:
+            return last
+        time.sleep(0.1)
+    return last
 
 
 def main():
@@ -194,6 +214,52 @@ def main():
     print("[11] unknown endpoint")
     err = post("/does/not/exist")
     check("error payload present", "error" in err, f"{err}")
+    print()
+
+    # ---- Test 12: opening an image always fits it to the viewport ----
+    # Regression: SetImage used to defer the fit-to-window and leave the zoom model
+    # stale, so a freshly opened image rendered at 100% (or the previous image's
+    # zoom) for one or more frames — a large photo then showed only a small middle
+    # portion ("the picture is not fully displayed").
+    print("[12] open fits to viewport (no stale zoom)")
+    info = get("/info")
+    vw, vh = info["viewport"]["width"], info["viewport"]["height"]
+    count = info["count"]
+
+    # Zoom in hard, then re-open the same file: it must come back fitted.
+    post("/zoom?scale=3"); settle()
+    opened = post("/open?path=" + urllib.parse.quote(info["file"]))
+    settle()
+    check("re-open resets zoom to fit",
+          approx(opened["zoom"], opened["fitZoom"], 1e-6),
+          f"zoom={opened['zoom']} fitZoom={opened['fitZoom']}")
+    check("re-open centered (pan ~ 0)",
+          approx(opened["pan"]["x"], 0, 0.01) and approx(opened["pan"]["y"], 0, 0.01),
+          f"{opened['pan']}")
+    dw, dh = opened["imageElement"]["width"], opened["imageElement"]["height"]
+    check("re-opened image fits viewport", dw <= vw + 0.5 and dh <= vh + 0.5,
+          f"{dw:.0f}x{dh:.0f} vs viewport {vw:.0f}x{vh:.0f}")
+
+    # Every sibling must satisfy the same "fully displayed" invariant, and the
+    # folder listing must not contain the same file twice.
+    seen = []
+    duplicates = []
+    overflow = []
+    for _ in range(count):
+        d = nav_next_and_wait()
+        if d is None or d.get("image") is None:
+            continue
+        key = os.path.normcase(d["file"])
+        if key in seen:
+            duplicates.append(d["file"])
+        seen.append(key)
+        w, h = d["imageElement"]["width"], d["imageElement"]["height"]
+        if w > vw + 0.5 or h > vh + 0.5:
+            overflow.append(f"{d['file']}: {w:.0f}x{h:.0f} > {vw:.0f}x{vh:.0f}")
+    check("no duplicate file entries in folder listing", not duplicates,
+          f"{duplicates}")
+    check("every image fits the viewport when opened", not overflow,
+          f"{overflow}")
     print()
 
     # ---- Summary ----
