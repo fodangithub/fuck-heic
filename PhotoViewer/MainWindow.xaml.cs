@@ -9,6 +9,8 @@ namespace PhotoViewer;
 public partial class MainWindow : Window
 {
     private readonly FolderNavigator _nav = new();
+    private readonly ImagePreloader _preloader = new();
+    private int _loadGeneration;      // guards against out-of-order async navigation
     private BitmapSource? _source;
     private double _zoom = 1.0;
     private double _fitZoom = 1.0;
@@ -67,9 +69,11 @@ public partial class MainWindow : Window
         {
             var bmp = ImageDecoder.Decode(path);
             _nav.LoadFolder(path);
+            _preloader.Clear();           // new folder — drop stale neighbor decodes
             SetImage(bmp);
             HintText.Visibility = Visibility.Collapsed;
             UpdateStatus();
+            PreloadNeighbors();
         }
         catch (Exception ex)
         {
@@ -92,19 +96,48 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() => FitToWindow(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
-    private void ShowSibling(string? path)
+    /// <summary>
+    /// Show a sibling image. Uses the preloaded decode when available (instant); otherwise
+    /// decodes on a background thread so the UI stays responsive. A generation counter
+    /// ensures rapid arrow presses can't apply a stale result out of order.
+    /// </summary>
+    private async void ShowSibling(string? path)
     {
         if (path is null) return;
+        int generation = ++_loadGeneration;
         try
         {
-            SetImage(ImageDecoder.Decode(path));
+            BitmapSource bmp;
+            if (_preloader.TryGetCached(path, out var cached) && cached is not null)
+            {
+                bmp = cached;
+            }
+            else
+            {
+                bmp = await _preloader.GetOrDecodeAsync(path);
+                if (generation != _loadGeneration) return;   // user moved on; drop stale
+            }
+
+            SetImage(bmp);
             UpdateStatus();
+            PreloadNeighbors();
         }
         catch (Exception ex)
         {
+            if (generation != _loadGeneration) return;
             MessageBox.Show(this, $"Could not open:\n{path}\n\n{ex.Message}",
                 "Photo Viewer", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>
+    /// Preload the images most likely to be navigated to next (forward-biased, since
+    /// paging forward is the common case). Keeps at most 4 full-res decodes in memory.
+    /// </summary>
+    private void PreloadNeighbors()
+    {
+        if (_nav.Count <= 1) return;
+        _preloader.PreloadAround(_nav.Files, _nav.Index, forward: 2, backward: 1);
     }
 
     // ---------- Fit / zoom ----------
