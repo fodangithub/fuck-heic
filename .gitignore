@@ -416,3 +416,10 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# local test/scratch harnesses
+apidump*/
+heicprobe/
+heicverify/
+wicverify/
+hectest/
