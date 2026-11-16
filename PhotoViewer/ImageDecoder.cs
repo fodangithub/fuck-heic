@@ -69,7 +69,9 @@ public static class ImageDecoder
 
         using var context = new HeifContext(sanitized);
         using var handle = context.GetPrimaryImageHandle();
-        using var image = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32, null);
+        // Decode to RGB24: it matches WPF's PixelFormats.Rgb24 byte-for-byte (R,G,B),
+        // so no R/B channel swap is needed and it uses 25% less memory than RGBA32.
+        using var image = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgb24, null);
 
         int width = image.Width;
         int height = image.Height;
@@ -78,27 +80,26 @@ public static class ImageDecoder
 
         var plane = image.GetPlane(HeifChannel.Interleaved);
         int stride = plane.Stride;
-        int bytesPerPixel = 4;
-        int requiredBytes = checked(stride * height);
-
+        int bytesPerPixel = 3;
         var buffer = new byte[width * height * bytesPerPixel];
-        // Copy row by row to drop any trailing stride padding.
-        for (int y = 0; y < height; y++)
-        {
-            IntPtr rowSrc = IntPtr.Add(plane.Scan0, y * stride);
-            Marshal.Copy(rowSrc, buffer, y * width * bytesPerPixel, width * bytesPerPixel);
-        }
 
-        // libheif emits bytes as R,G,B,A, but WPF's Bgra32 reads B,G,R,A.
-        // Swap the red and blue channels in place so colors are correct.
-        for (int i = 0; i < buffer.Length; i += 4)
+        if (stride == width * bytesPerPixel)
         {
-            (buffer[i], buffer[i + 2]) = (buffer[i + 2], buffer[i]);
+            // No row padding — copy the whole plane in one fast call.
+            Marshal.Copy(plane.Scan0, buffer, 0, width * height * bytesPerPixel);
+        }
+        else
+        {
+            for (int y = 0; y < height; y++)
+            {
+                IntPtr rowSrc = IntPtr.Add(plane.Scan0, y * stride);
+                Marshal.Copy(rowSrc, buffer, y * width * bytesPerPixel, width * bytesPerPixel);
+            }
         }
 
         var bmp = BitmapSource.Create(
             width, height, 96, 96,
-            PixelFormats.Bgra32, null, buffer, width * bytesPerPixel);
+            PixelFormats.Rgb24, null, buffer, width * bytesPerPixel);
         bmp.Freeze();
         return bmp;
     }
