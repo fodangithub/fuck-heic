@@ -187,6 +187,11 @@ public sealed class DebugHttpService : IDisposable
                 if (get) return Json(_window.GetDebugInfo());
                 break;
 
+            // Alpha bounds of the photo in an offscreen visual-tree render.
+            case "/renderbounds":
+                if (get) return Json(_window.GetRenderedImageBounds());
+                break;
+
             case "/pan":
                 if (post) { _window.PanBy(Num(query, "dx"), Num(query, "dy")); return Json(_window.GetDebugInfo()); }
                 break;

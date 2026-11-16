@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
@@ -110,20 +111,12 @@ public partial class MainWindow : Window
         _source = bmp;
         _rotation = 0;
         _pan = new Point(0, 0);
-        // The Image element stays at the ORIGINAL pixel size and never grows with zoom;
-        // zooming is done via ScaleTransform (clipped before rasterization), which avoids
-        // WPF's unreliable rendering of giant layout elements when panned at high zoom.
-        ImageHost.Width = bmp.PixelWidth;
-        ImageHost.Height = bmp.PixelHeight;
-        RotateTransform.Angle = 0;
-        PanTransform.X = 0;
-        PanTransform.Y = 0;
-        ZoomTransform.ScaleX = 1;
-        ZoomTransform.ScaleY = 1;
-        // Keep the zoom model in sync with the reset transform. Leaving the previous
-        // image's zoom here (e.g. 300%) made the next image render cropped until a
-        // deferred fit caught up — a large photo showed only a small middle portion.
+        // Reset both the zoom model and its transform. A new image must never inherit
+        // the previous photo's zoom, even for a single frame.
         _zoom = 1.0;
+        _fitZoom = 1.0;
+        ApplyBaseSize();
+        ApplyTransforms();
         ImageHost.Source = bmp;
 
         if (Viewport.ActualWidth > 0 && Viewport.ActualHeight > 0)
@@ -212,6 +205,12 @@ public partial class MainWindow : Window
         _fitZoom = Math.Min(scaleX, scaleY);
         _fitZoom = Math.Min(_fitZoom, 1.0); // never upscale beyond 100% on fit
 
+        // Keep the layout element at the fitted size. A WPF element larger than its
+        // parent is clipped BEFORE its RenderTransform, so scaling down an
+        // original-size Image would render only its center. Zooming is relative to
+        // this fitted baseline instead.
+        ApplyBaseSize();
+
         // Reset pan so the fitted image is centered.
         _pan = new Point(0, 0);
         PanTransform.X = 0;
@@ -222,15 +221,25 @@ public partial class MainWindow : Window
         ImageHost.Visibility = Visibility.Visible;
     }
 
+    /// <summary>Size the layout element to the fitted image, before any zoom transform.</summary>
+    private void ApplyBaseSize()
+    {
+        if (_source is null) return;
+        double fit = Math.Max(_fitZoom, 1e-3);
+        ImageHost.Width = _source.PixelWidth * fit;
+        ImageHost.Height = _source.PixelHeight * fit;
+    }
+
     /// <summary>
-    /// Zoom is a ScaleTransform (about the image center) on an element kept at the original
-    /// pixel size. Because render transforms are clipped before rasterization, only the
-    /// visible viewport region is drawn — so high zoom + pan stays correct and fast.
+    /// Zoom is a RenderTransform relative to the fitted layout size. Keeping the layout
+    /// element small avoids both WPF's pre-transform clipping at fit zoom and its
+    /// oversized-rasterization clipping at high zoom + pan.
     /// </summary>
     private void ApplyTransforms()
     {
-        ZoomTransform.ScaleX = _zoom;
-        ZoomTransform.ScaleY = _zoom;
+        double relativeZoom = _zoom / Math.Max(_fitZoom, 1e-3);
+        ZoomTransform.ScaleX = relativeZoom;
+        ZoomTransform.ScaleY = relativeZoom;
         PanTransform.X = _pan.X;
         PanTransform.Y = _pan.Y;
         RotateTransform.Angle = _rotation;
@@ -448,6 +457,17 @@ public partial class MainWindow : Window
             imageElement = _source is null
                 ? null
                 : new { width = _source.PixelWidth * _zoom, height = _source.PixelHeight * _zoom },
+            // The untransformed layout element must stay within the viewport; otherwise
+            // WPF clips it before the zoom RenderTransform and shows only a center crop.
+            imageLayout = new
+            {
+                width = ImageHost.Width,
+                height = ImageHost.Height,
+                actualWidth = ImageHost.ActualWidth,
+                actualHeight = ImageHost.ActualHeight
+            },
+            renderScale = ZoomTransform.ScaleX,
+            imageVisible = ImageHost.Visibility == Visibility.Visible,
             zoom = _zoom,
             zoomPercent = Math.Round(_zoom * 100, 2),
             fitZoom = _fitZoom,
@@ -457,6 +477,55 @@ public partial class MainWindow : Window
             autoPlayIntervalSeconds = AutoPlayIntervalSeconds,
             zoomDropdownOpen = ZoomBox.IsDropDownOpen,
             zoomItems = ZoomBox.Items.Count
+        };
+    }
+
+    /// <summary>
+    /// Measure the photo pixels in an offscreen RenderTargetBitmap render of the viewport.
+    /// The viewport has a transparent background, so the alpha bounding box captures the
+    /// visual tree's transform/clipping geometry. Used by Debug-only regression tests.
+    /// </summary>
+    public object GetRenderedImageBounds()
+    {
+        Viewport.UpdateLayout();
+        int w = (int)Math.Ceiling(Viewport.ActualWidth);
+        int h = (int)Math.Ceiling(Viewport.ActualHeight);
+        if (w <= 0 || h <= 0)
+            return new { left = 0, top = 0, width = 0, height = 0, viewportWidth = w, viewportHeight = h, coverage = 0.0 };
+
+        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(Viewport);
+        int stride = w * 4;
+        var pixels = new byte[stride * h];
+        rtb.CopyPixels(pixels, stride, 0);
+
+        int minX = w, minY = h, maxX = -1, maxY = -1;
+        long visiblePixels = 0;
+        for (int y = 0; y < h; y++)
+        {
+            int row = y * stride;
+            for (int x = 0; x < w; x++)
+            {
+                if (pixels[row + x * 4 + 3] <= 8) continue;   // transparent viewport
+                visiblePixels++;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+
+        int boundsWidth = maxX < 0 ? 0 : maxX - minX + 1;
+        int boundsHeight = maxY < 0 ? 0 : maxY - minY + 1;
+        return new
+        {
+            left = maxX < 0 ? 0 : minX,
+            top = maxY < 0 ? 0 : minY,
+            width = boundsWidth,
+            height = boundsHeight,
+            viewportWidth = w,
+            viewportHeight = h,
+            coverage = (double)visiblePixels / (w * h)
         };
     }
 
