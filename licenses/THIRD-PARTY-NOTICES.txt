@@ -1,0 +1,89 @@
+PhotoViewer third-party notices
+==============================
+
+These notices accompany the binary distribution of PhotoViewer. The application
+code itself is licensed under the MIT License; see LICENSE in the published
+folder. The following third-party components are redistributed with the binary.
+
+GNU license texts
+-----------------
+GPL-3.0.txt         GNU General Public License, version 3
+LGPL-3.0.txt        GNU Lesser General Public License, version 3
+The LGPL-3.0 text is an additional-permissions license layered on GPL-3.0;
+both texts are supplied.
+
+LGPL components shipped as replaceable DLLs
+-------------------------------------------
+libheif 1.20.2
+  Bundled file: libheif.dll
+  License: GNU Lesser General Public License v3.0 or later
+  Copyright (c) 2017-2020 Struktur AG
+  Copyright (c) 2017-2025 Dirk Farin
+  Source: https://github.com/strukturag/libheif/tree/v1.20.2
+  License text: third-party/libheif-COPYING.txt, LGPL-3.0.txt, GPL-3.0.txt
+
+LibHeifSharp 3.2.0
+  Bundled file: LibHeifSharp.dll
+  License: GNU Lesser General Public License v3.0 or later
+  Copyright (c) 2023 Nicholas Hayes and contributors
+  Source: https://github.com/0xC0000054/libheif-sharp
+  Exact source commit: d208cd6f3ba9023c6c3692678a7c421c3e33c7b9
+  License texts: LGPL-3.0.txt, GPL-3.0.txt
+
+libde265 (compiled into libheif.dll)
+  License: GNU Lesser General Public License
+  Source: https://github.com/strukturag/libde265
+  License text: third-party/libde265-COPYING.txt, LGPL-3.0.txt, GPL-3.0.txt
+
+LibHeif.Native.Runtime 1.20.2 is the NuGet packaging/build source for the
+unmodified libheif.dll shipped here:
+  Project: https://github.com/borka-s/LibHeif.Native.Runtime
+  Exact commit: 797a1d64036ca7a9aed612c194e958a2306bdab1
+  Declared license expression: LGPL-3.0-or-later
+
+BSD-style and permissive components compiled into libheif.dll
+-------------------------------------------------------------
+dav1d
+  License: BSD-2-Clause
+  Copyright (c) 2018-2025, VideoLAN and dav1d authors
+  Source: https://code.videolan.org/videolan/dav1d
+  License text: third-party/dav1d-COPYING.txt
+
+libaom
+  License: BSD-2-Clause
+  Copyright (c) 2016, Alliance for Open Media. All rights reserved.
+  Source: https://aomedia.googlesource.com/aom
+  License text: third-party/libaom-LICENSE.txt
+
+zlib / deflate
+  License: zlib License
+  Source: https://zlib.net/
+  License text: third-party/Zlib.txt
+
+A generic copy of the BSD-2-Clause text is also supplied in
+third-party/BSD-2-Clause.txt for reference. The exact copyright notices for
+dav1d and libaom are in their respective upstream license files.
+
+Microsoft .NET 9.0.23 runtime / WindowsDesktop / WPF
+----------------------------------------------------
+The published folder contains a self-contained .NET 9.0.23 runtime and WPF
+runtime files. These are distributed under the MIT License and accompanying
+third-party notices:
+  License: dotnet/LICENSE.TXT
+  Notices: dotnet/THIRD-PARTY-NOTICES.TXT
+  Source: https://github.com/dotnet/runtime/tree/v9.0.23
+
+Notes
+-----
+* The shipped libheif.dll and LibHeifSharp.dll are unmodified copies of the
+  NuGet package binaries; hashes are recorded in LIBHEIF-BUILD-INFO.md.
+* The native package README claims dav1d is LGPL. The upstream dav1d COPYING
+  file says BSD-2-Clause; this notice follows the upstream license.
+* No x265/GPL encoder was detected in the bundled native binary. Build
+  provenance should be rechecked if native binaries are replaced.
+* The application source is not required to be disclosed by the LGPL. The
+  LGPL libraries remain separate, replaceable files; see RELINKING.md.
+* Local source archives, NuGet package metadata, and exact package files are
+  included under source/ and package-metadata/ as part of the source offer.
+* A written offer for the Corresponding Source of the LGPL components is in
+  SOURCE-OFFER.txt.

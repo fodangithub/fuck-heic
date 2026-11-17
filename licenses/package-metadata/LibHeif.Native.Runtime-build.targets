@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LibHeif.Native.Runtime.targets
+  
+  This file is automatically imported by projects that reference LibHeif.Native.Runtime.
+  
+  PURPOSE:
+  The runtimes/{rid}/native/ NuGet convention copies the right native binary
+  automatically ONLY when the consuming project has a RuntimeIdentifier set
+  (i.e. a self-contained publish, or dotnet build -r <rid>).
+  
+  For the common case of "AnyCPU" .NET projects (no explicit RID), this
+  .targets file detects the current OS/arch at build time and copies the
+  matching native binary next to the output assembly so P/Invoke can find it.
+  
+  This mirrors the approach used by packages like SkiaSharp and SQLitePCLRaw.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <LibHeifNativeRoot>$(MSBuildThisFileDirectory)..\runtimes\</LibHeifNativeRoot>
+  </PropertyGroup>
+
+  <Target Name="CopyLibHeifNative"
+          AfterTargets="Build"
+          Condition="'$(RuntimeIdentifier)' == ''">
+
+    <!-- Windows x64 -->
+    <Copy Condition="$([MSBuild]::IsOsPlatform('Windows')) AND '$(PlatformTarget)' != 'x86'"
+          SourceFiles="$(LibHeifNativeRoot)win-x64\native\libheif.dll"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+
+    <!-- Linux x64 -->
+    <Copy Condition="$([MSBuild]::IsOsPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'"
+          SourceFiles="$(LibHeifNativeRoot)linux-x64\native\libheif.so"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+
+  </Target>
+
+</Project>

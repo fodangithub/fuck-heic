@@ -1,0 +1,41 @@
+Written offer for Corresponding Source
+======================================
+
+This written offer accompanies the binary distribution of PhotoViewer and is
+valid for any third party who possesses a copy of that distribution.
+
+PhotoViewer conveys the following components under the GNU Lesser General
+Public License, version 3 or later, and the GNU General Public License, version 3
+as incorporated by the LGPL:
+
+  * libheif 1.20.2, shipped as libheif.dll
+  * LibHeifSharp 3.2.0, shipped as LibHeifSharp.dll
+  * libde265, compiled into libheif.dll
+
+For at least three years from the date you receive this distribution, the
+publisher will provide, to any third party, a copy of the Corresponding Source
+for those LGPL components, including build scripts, build flags, and any
+modifications used to produce the shipped binaries, at no charge beyond the
+reasonable cost of delivery.
+
+The exact upstream source locations, commits, build preset, and binary hashes
+are recorded in LIBHEIF-BUILD-INFO.md. The shipped DLLs are unmodified copies of
+the NuGet package binaries; no modified library source is required for them.
+
+Local convenience copies of the LGPL source archives are included in
+source/, and the exact NuGet package files, nuspec metadata, README files, and
+MSBuild targets are included in package-metadata/. The libde265 archive is the
+current upstream source snapshot; the exact compiled revision, if different, is
+covered by this written offer.
+
+To request the Corresponding Source, open an issue at:
+
+  https://github.com/fodangithub/fuck-heic/issues
+
+Alternatively, the upstream source archives and build repository linked in
+LIBHEIF-BUILD-INFO.md may be downloaded directly from their respective
+upstreams at no charge.
+
+This offer covers the LGPL libraries and their build information only. It does
+not require or imply disclosure of PhotoViewer's application source, which is
+licensed separately under the MIT License.

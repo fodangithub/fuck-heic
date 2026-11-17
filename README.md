@@ -24,17 +24,19 @@ plus **HEIC, HEIF, AVIF, HIF** via libheif.
 Requires the .NET 9 SDK.
 
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+dotnet publish -c Release -r win-x64 --self-contained true -o publish
 ```
 
-This produces a single self-contained executable at `publish/PhotoViewer.exe` (~60 MB) that
-includes the .NET runtime and the native `libheif` decoder — copy it to any Windows 10/11
-x64 machine and run, no install needed.
+This produces a self-contained **folder** at `publish/` containing
+`PhotoViewer.exe`, the .NET and WPF runtimes, `libheif.dll`,
+`LibHeifSharp.dll`, and the license/notice files. Copy the whole folder to any
+Windows 10/11 x64 machine and run `PhotoViewer.exe`; no install is needed. The
+LGPL libraries remain separate, replaceable DLLs.
 
 For a quick debug build:
 
 ```bash
-dotnet build -c Release
+dotnet build -c Debug
 ```
 
 ## How HEIC decoding works
@@ -45,17 +47,36 @@ dotnet build -c Release
   [LibHeifSharp](https://github.com/0xC0000054/libheif-sharp) bindings, with the native
   `libheif.dll` (HEVC + AV1 decoders compiled in) supplied by the
   [LibHeif.Native.Runtime](https://www.nuget.org/packages/LibHeif.Native.Runtime) package.
-  Images are decoded to interleaved RGBA (a byte layout identical to WPF's `Bgra32`) and
-  wrapped in a `BitmapSource`. EXIF orientation is applied automatically.
+  Images are decoded to interleaved RGB24 (matching WPF's `PixelFormats.Rgb24`)
+  and wrapped in a `BitmapSource`. EXIF orientation is applied automatically.
 - All other formats → WPF's built-in `BitmapImage` (Windows codecs).
+
+## Third-party licenses and LGPL compliance
+
+PhotoViewer redistributes LGPL-3.0-or-later components, including `libheif.dll`
+and `LibHeifSharp.dll`. The `licenses/` folder is copied into the published
+folder and contains:
+
+- verbatim `GPL-3.0.txt` and `LGPL-3.0.txt`
+- `THIRD-PARTY-NOTICES.txt`
+- `SOURCE-OFFER.txt` with the written Corresponding Source offer
+- `LIBHEIF-BUILD-INFO.md` with exact versions, commits, build flags, and hashes
+- `RELINKING.md` with instructions for replacing the shared libraries
+- upstream license texts under `licenses/third-party/` and .NET notices under
+  `licenses/dotnet/`
+
+The publish output is deliberately a folder rather than a single-file bundle so
+the LGPL libraries remain replaceable. See `licenses/README.md` for the full
+index.
 
 ## Notes
 
-- `libheif` is LGPL-3.0 and is shipped as a separate shared library (bundled inside the
-  single-file executable but extracted at runtime), which satisfies the LGPL for
-  proprietary use.
 - The exe is x64. Build with `-r win-x86` for 32-bit if needed.
+- Generated 512×512 icon reference images are kept in
+  `PhotoViewer/Icons/Originals/`; the normalized runtime icons are embedded WPF
+  resources in `PhotoViewer/Icons/`.
 
 ## License
 
-Application code: MIT. See libheif's LGPL-3.0 notice above for the bundled decoder.
+Application code: MIT. See `LICENSE` and the third-party notices/source offer in
+`licenses/` for the bundled libraries.

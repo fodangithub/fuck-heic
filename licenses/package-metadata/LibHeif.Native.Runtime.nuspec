@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>LibHeif.Native.Runtime</id>
+    <version>1.20.2</version>
+    <authors>Boris Siljanovski</authors>
+    <developmentDependency>true</developmentDependency>
+    <license type="expression">LGPL-3.0-or-later</license>
+    <licenseUrl>https://licenses.nuget.org/LGPL-3.0-or-later</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/borka-s/LibHeif.Native.Runtime</projectUrl>
+    <description>Native libheif binaries for Windows (x64) and Linux (x64).
+      Intended for use with LibHeifSharp. Provides libheif.dll / libheif.so
+      in the correct runtimes/ layout so P/Invoke resolution works automatically.</description>
+    <tags>libheif heif heic avif native image</tags>
+    <repository type="git" url="https://github.com/borka-s/LibHeif.Native.Runtime" commit="797a1d64036ca7a9aed612c194e958a2306bdab1" />
+  </metadata>
+</package>

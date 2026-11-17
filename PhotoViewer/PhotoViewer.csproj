@@ -23,6 +23,16 @@
     <Resource Include="Icons\*.png" />
   </ItemGroup>
 
+  <!-- License texts, source offer, notices, and 512px icon references travel with the folder publish. -->
+  <ItemGroup>
+    <Content Include="..\LICENSE" Link="LICENSE"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\licenses\**\*.*" Link="licenses\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Icons\Originals\**\*.*" Link="Icons\Originals\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="LibHeif.Native.Runtime" Version="1.20.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

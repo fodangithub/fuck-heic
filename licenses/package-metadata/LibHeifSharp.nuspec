@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>LibHeifSharp</id>
+    <version>3.2.0</version>
+    <authors>Nicholas Hayes</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">LGPL-3.0-or-later</license>
+    <licenseUrl>https://licenses.nuget.org/LGPL-3.0-or-later</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://0xc0000054.github.io/libheif-sharp/</projectUrl>
+    <description>Provides .NET bindings for libheif.
+
+Features:
+
+* Supports decoding
+    * Top-level images
+    * Thumbnails
+    * Depth images
+    * Vendor-specific auxiliary images
+* Supports encoding
+    * Top-level images
+    * Thumbnails
+* Supports reading and writing meta-data
+
+Requirements:
+
+The libheif shared library must be named `libheif` in order for it to be found by P/Invoke.
+On some platforms a DllImportResolver can be used to customize the loading of the `libheif` native library.    
+See `LibHeifSharpDllImportResolver.cs` in the libheif-sharp-samples repository for an example of this.
+
+The minimum supported libheif version is 1.9.0.</description>
+    <releaseNotes>v3.2.0 - 2023-11-19
+## Added
+
+* Support for reading and writing the inline and reference mask region items.
+  - Requires LibHeif 1.17.0 or later.
+* `ReadOnlyMemory&lt;byte&gt;` and `ReadOnlySpan&lt;byte&gt;` overloads for various APIs.
+  - This adds a `System.Memory` dependency to the .NET Standard 2.0 target.
+* An `AsSpan` method to the `HeifIccColorProfile` class.
+* A .NET Standard 2.1 target.</releaseNotes>
+    <copyright>Copyright © 2023 Nicholas Hayes and contributors</copyright>
+    <tags>libheif heif heic avif</tags>
+    <repository type="git" url="https://github.com/0xC0000054/libheif-sharp.git" commit="d208cd6f3ba9023c6c3692678a7c421c3e33c7b9" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="System.Memory" version="4.5.5" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+  </metadata>
+</package>
