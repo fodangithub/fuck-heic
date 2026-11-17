@@ -7,7 +7,8 @@ Usage:
 
 Start the app in a Debug build with an image open (e.g. a HEIC), then run this script.
 It drives the UI over http://127.0.0.1:<port>, asserts on the reported state, and
-checks /renderbounds for offscreen rendered-pixel geometry.
+checks /renderbounds for offscreen rendered-pixel geometry and /context endpoints
+for the image context menu.
 
 Requires: Python 3.7+ (stdlib only).
 """
@@ -371,6 +372,80 @@ def main():
     reset = post("/reset"); settle()
     check_fit_layout(reset, "reset after zoom")
     check_rendered(reset, "reset after zoom")
+    print()
+
+    # ---- Test 14: image context menu structure and transform commands ----
+    print("[14] image context menu")
+    menu = get("/context/info")
+    items = menu["items"]
+    types = [i.get("type") for i in items]
+    expected_types = (
+        ["item"] * 4 + ["separator"] +
+        ["item"] * 4 + ["separator"] +
+        ["item"] + ["separator"] + ["item"]
+    )
+    check("context menu has 13 entries", menu.get("itemCount") == 13, str(menu.get("itemCount")))
+    check("context menu separator placement", types == expected_types, str(types))
+
+    names = [i.get("name") for i in items if i.get("type") == "item"]
+    expected_names = [
+        "ImageInfoMenuItem", "CopyImageMenuItem", "CopyPathMenuItem", "OpenFolderMenuItem",
+        "RotateLeftMenuItem", "RotateRightMenuItem", "FlipHorizontalMenuItem",
+        "FlipVerticalMenuItem", "PrintMenuItem", "PropertiesMenuItem"
+    ]
+    check("all requested commands are present", names == expected_names, str(names))
+
+    icon_names = [i["name"] for i in items if i.get("type") == "item" and i.get("hasIcon")]
+    expected_icons = [
+        "CopyImageMenuItem", "OpenFolderMenuItem", "RotateLeftMenuItem",
+        "RotateRightMenuItem", "FlipHorizontalMenuItem", "FlipVerticalMenuItem",
+        "PrintMenuItem", "PropertiesMenuItem"
+    ]
+    check("icons are on exactly the requested items", icon_names == expected_icons, str(icon_names))
+    check("icon resources are assigned",
+          all(i.get("icon") for i in items if i.get("hasIcon")), str(items))
+    no_icon_names = [i["name"] for i in items if i.get("type") == "item" and not i.get("hasIcon")]
+    check("label and copy-path have no icon",
+          no_icon_names == ["ImageInfoMenuItem", "CopyPathMenuItem"], str(no_icon_names))
+
+    label = next(i.get("header", "") for i in items if i.get("name") == "ImageInfoMenuItem")
+    check("label shows image dimensions and scale",
+          "×" in label and "Scale" in label, label)
+    check("commands enabled for loaded image",
+          all(i.get("enabled") for i in items
+              if i.get("type") == "item" and i.get("name") != "ImageInfoMenuItem"),
+          str([(i.get("name"), i.get("enabled")) for i in items]))
+
+    opened_menu = post("/context/open?open=1")
+    check("context menu opens", opened_menu.get("contextMenuOpen") is True,
+          f"contextMenuOpen={opened_menu.get('contextMenuOpen')}")
+    closed_menu = post("/context/open?open=0")
+    check("context menu closes", closed_menu.get("contextMenuOpen") is False,
+          f"contextMenuOpen={closed_menu.get('contextMenuOpen')}")
+
+    flipped = post("/context/click?name=FlipHorizontalMenuItem")
+    check("flip horizontal command toggles state",
+          flipped.get("ok") is True and flipped["info"]["flipHorizontal"] is True, str(flipped))
+    flipped_v = post("/context/click?name=FlipVerticalMenuItem")
+    check("flip vertical command toggles state",
+          flipped_v.get("ok") is True
+          and flipped_v["info"]["flipVertical"] is True
+          and flipped_v["info"]["flipHorizontal"] is True, str(flipped_v))
+    rotated = post("/context/click?name=RotateLeftMenuItem")
+    check("rotate left command changes rotation",
+          rotated.get("ok") is True
+          and approx((rotated["info"]["rotation"] + 90) % 360, 0, 1e-6),
+          f"rotation={rotated['info']['rotation']}")
+    rotated_r = post("/context/click?name=RotateRightMenuItem")
+    check("rotate right command restores rotation",
+          rotated_r.get("ok") is True
+          and approx(rotated_r["info"]["rotation"] % 360, 0, 1e-6),
+          f"rotation={rotated_r['info']['rotation']}")
+    reset = post("/reset"); settle()
+    check("reset clears flips and rotation",
+          reset["flipHorizontal"] is False and reset["flipVertical"] is False
+          and approx(reset["rotation"], 0, 1e-6),
+          f"flips={reset['flipHorizontal']},{reset['flipVertical']} rotation={reset['rotation']}")
     print()
 
     # ---- Summary ----

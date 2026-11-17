@@ -1,7 +1,12 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
@@ -21,6 +26,8 @@ public partial class MainWindow : Window
     private double _fitZoom = 1.0;
     private bool _isFit = true;       // fit-to-window when a new image loads
     private double _rotation;         // accumulated degrees (0/90/180/270)
+    private double _flipX = 1.0;      // -1 when horizontally mirrored
+    private double _flipY = 1.0;      // -1 when vertically mirrored
     private Point _pan;               // pan offset in device pixels (applied via PanTransform)
     private Point _dragOrigin;
     private Point _panOrigin;
@@ -49,6 +56,7 @@ public partial class MainWindow : Window
             new RelayCommand(_ => OpenExecuted()),
             Key.O, ModifierKeys.Control);
         InputBindings.Add(openBinding);
+        UpdateImageContextMenu();
     }
 
     /// <summary>
@@ -110,6 +118,8 @@ public partial class MainWindow : Window
     {
         _source = bmp;
         _rotation = 0;
+        _flipX = 1.0;
+        _flipY = 1.0;
         _pan = new Point(0, 0);
         // Reset both the zoom model and its transform. A new image must never inherit
         // the previous photo's zoom, even for a single frame.
@@ -134,6 +144,7 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(new Action(FitToWindow),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
+        UpdateImageContextMenu();
     }
 
     /// <summary>
@@ -219,6 +230,7 @@ public partial class MainWindow : Window
         _isFit = true;
         // The image may have been hidden while waiting for the first fit (startup).
         ImageHost.Visibility = Visibility.Visible;
+        UpdateImageContextMenu();
     }
 
     /// <summary>Size the layout element to the fitted image, before any zoom transform.</summary>
@@ -240,6 +252,8 @@ public partial class MainWindow : Window
         double relativeZoom = _zoom / Math.Max(_fitZoom, 1e-3);
         ZoomTransform.ScaleX = relativeZoom;
         ZoomTransform.ScaleY = relativeZoom;
+        FlipTransform.ScaleX = _flipX;
+        FlipTransform.ScaleY = _flipY;
         PanTransform.X = _pan.X;
         PanTransform.Y = _pan.Y;
         RotateTransform.Angle = _rotation;
@@ -426,6 +440,8 @@ public partial class MainWindow : Window
     public void ResetView()
     {
         _rotation = 0;
+        _flipX = 1.0;
+        _flipY = 1.0;
         RotateTransform.Angle = 0;
         FitToWindow();
     }
@@ -435,6 +451,209 @@ public partial class MainWindow : Window
 
     /// <summary>Test hook: open/close the zoom drop-down programmatically.</summary>
     public void SetZoomDropdownOpen(bool open) => ZoomBox.IsDropDownOpen = open;
+
+    /// <summary>Test hook: open the image context menu centered on the viewport.</summary>
+    public void SetImageContextMenuOpen(bool open)
+    {
+        UpdateImageContextMenu();
+        if (open)
+        {
+            ImageContextMenu.PlacementTarget = Viewport;
+            ImageContextMenu.Placement = PlacementMode.Center;
+            ImageContextMenu.HorizontalOffset = 0;
+            ImageContextMenu.VerticalOffset = 0;
+            ImageContextMenu.IsOpen = true;
+            ImageContextMenu.UpdateLayout();
+        }
+        else
+        {
+            ImageContextMenu.IsOpen = false;
+            ImageContextMenu.PlacementTarget = ImageHost;
+            ImageContextMenu.Placement = PlacementMode.MousePoint;
+        }
+    }
+
+    // ---------- Image context menu ----------
+    public void RotateLeft() => RotateBy(-90);
+    public void RotateRight() => RotateBy(90);
+
+    public void FlipHorizontal()
+    {
+        if (_source is null) return;
+        _flipX *= -1;
+        ApplyTransforms();
+    }
+
+    public void FlipVertical()
+    {
+        if (_source is null) return;
+        _flipY *= -1;
+        ApplyTransforms();
+    }
+
+    /// <summary>Debug-only snapshot of the context-menu structure for regression tests.</summary>
+    public object GetImageContextMenuInfo()
+    {
+        UpdateImageContextMenu();
+        var items = new List<object>();
+        foreach (object entry in ImageContextMenu.Items)
+        {
+            if (entry is Separator)
+            {
+                items.Add(new { type = "separator" });
+                continue;
+            }
+            if (entry is not MenuItem menuItem) continue;
+
+            var iconElement = menuItem.Icon as FrameworkElement;
+            bool spacer = (iconElement?.Tag as string) == "spacer";
+            string? icon = null;
+            if (!spacer && menuItem.Icon is System.Windows.Controls.Image image)
+                icon = image.Source?.ToString();
+
+            items.Add(new
+            {
+                type = "item",
+                name = menuItem.Name,
+                header = menuItem.Header?.ToString(),
+                enabled = menuItem.IsEnabled,
+                hasIcon = !spacer && menuItem.Icon is not null,
+                icon
+            });
+        }
+        return new { itemCount = items.Count, items };
+    }
+
+    /// <summary>Raise a context-menu item's Click event by its x:Name (Debug tests only).</summary>
+    public bool InvokeImageContextMenuItem(string name)
+    {
+        UpdateImageContextMenu();
+        var item = ImageContextMenu.Items.OfType<MenuItem>()
+            .FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (item is null || !item.IsEnabled) return false;
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        return true;
+    }
+
+    private void UpdateImageContextMenu()
+    {
+        bool hasImage = _source is not null;
+        string? path = _nav.Current;
+        bool hasFile = !string.IsNullOrEmpty(path) && File.Exists(path);
+
+        ImageInfoMenuItem.Header = hasImage
+            ? $"{_source!.PixelWidth} × {_source.PixelHeight} px  •  Scale {Math.Round(_zoom * 100)}%"
+            : "No image";
+        ImageInfoMenuItem.IsEnabled = false;
+
+        CopyImageMenuItem.IsEnabled = hasImage;
+        CopyPathMenuItem.IsEnabled = hasFile;
+        OpenFolderMenuItem.IsEnabled = hasFile;
+        RotateLeftMenuItem.IsEnabled = hasImage;
+        RotateRightMenuItem.IsEnabled = hasImage;
+        FlipHorizontalMenuItem.IsEnabled = hasImage;
+        FlipVerticalMenuItem.IsEnabled = hasImage;
+        PrintMenuItem.IsEnabled = hasImage;
+        PropertiesMenuItem.IsEnabled = hasFile;
+    }
+
+    private void ImageContextMenu_Opened(object sender, RoutedEventArgs e) => UpdateImageContextMenu();
+
+    private void CopyImage_Click(object sender, RoutedEventArgs e) => CopyImageToClipboard();
+    private void CopyPath_Click(object sender, RoutedEventArgs e) => CopyImagePathToClipboard();
+    private void OpenFolder_Click(object sender, RoutedEventArgs e) => OpenContainingFolder();
+    private void RotateLeft_Click(object sender, RoutedEventArgs e) => RotateLeft();
+    private void RotateRight_Click(object sender, RoutedEventArgs e) => RotateRight();
+    private void FlipHorizontal_Click(object sender, RoutedEventArgs e) => FlipHorizontal();
+    private void FlipVertical_Click(object sender, RoutedEventArgs e) => FlipVertical();
+    private void Print_Click(object sender, RoutedEventArgs e) => PrintImage();
+    private void Properties_Click(object sender, RoutedEventArgs e) => ShowFileProperties();
+
+    private void CopyImageToClipboard()
+    {
+        if (_source is null) return;
+        try
+        {
+            Clipboard.Clear();
+            Clipboard.SetImage(_source);
+        }
+        catch (Exception ex) { ShowActionError("copy the image", ex); }
+    }
+
+    private void CopyImagePathToClipboard()
+    {
+        string? path = _nav.Current;
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            Clipboard.Clear();
+            Clipboard.SetText(Path.GetFullPath(path));
+        }
+        catch (Exception ex) { ShowActionError("copy the image path", ex); }
+    }
+
+    private void OpenContainingFolder()
+    {
+        string? path = _nav.Current;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = true,
+                Arguments = $"/select,\"{path}\""
+            });
+        }
+        catch (Exception ex) { ShowActionError("open the containing folder", ex); }
+    }
+
+    private void PrintImage()
+    {
+        if (_source is null) return;
+        try
+        {
+            var dialog = new PrintDialog();
+            if (dialog.ShowDialog() != true) return;
+
+            double pageWidth = dialog.PrintableAreaWidth;
+            double pageHeight = dialog.PrintableAreaHeight;
+            if (pageWidth <= 0 || pageHeight <= 0) return;
+
+            double scale = Math.Min(pageWidth / _source.PixelWidth, pageHeight / _source.PixelHeight);
+            double width = _source.PixelWidth * scale;
+            double height = _source.PixelHeight * scale;
+            var visual = new DrawingVisual();
+            using (var context = visual.RenderOpen())
+            {
+                context.DrawImage(_source,
+                    new Rect((pageWidth - width) / 2, (pageHeight - height) / 2, width, height));
+            }
+
+            string name = _nav.Current is null ? "image" : Path.GetFileName(_nav.Current);
+            dialog.PrintVisual(visual, $"Photo Viewer — {name}");
+        }
+        catch (Exception ex) { ShowActionError("print the image", ex); }
+    }
+
+    private void ShowFileProperties()
+    {
+        string? path = _nav.Current;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        try
+        {
+            // ProcessStartInfo.Verb="properties" depends on a file association, which
+            // HEIC often lacks. ShellExecuteEx + SEE_MASK_INVOKEIDLIST asks the Shell's
+            // context-menu handler to show the system property sheet directly.
+            NativeShell.ShowFileProperties(this, path);
+        }
+        catch (Exception ex) { ShowActionError("open file properties", ex); }
+    }
+
+    private void ShowActionError(string action, Exception ex)
+    {
+        MessageBox.Show(this, $"Could not {action}:\n\n{ex.Message}",
+            "Photo Viewer", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
 
     /// <summary>
     /// Snapshot of image + UI geometry for the Debug HTTP service and tests.
@@ -472,6 +691,10 @@ public partial class MainWindow : Window
             zoomPercent = Math.Round(_zoom * 100, 2),
             fitZoom = _fitZoom,
             rotation = _rotation,
+            flipHorizontal = _flipX < 0,
+            flipVertical = _flipY < 0,
+            contextMenuOpen = ImageContextMenu.IsOpen,
+            contextMenuItems = ImageContextMenu.Items.Count,
             pan = new { x = _pan.X, y = _pan.Y },
             isAutoPlaying = IsAutoPlaying,
             autoPlayIntervalSeconds = AutoPlayIntervalSeconds,
@@ -588,6 +811,64 @@ public partial class MainWindow : Window
             if (files.Length > 0 && File.Exists(files[0]))
                 LoadFile(files[0]);
         }
+    }
+}
+
+internal static class NativeShell
+{
+    private const uint SEE_MASK_INVOKEIDLIST = 0x0000000C;
+    private const int SW_SHOW = 5;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SHELLEXECUTEINFO
+    {
+        public int cbSize;
+        public uint fMask;
+        public IntPtr hwnd;
+        [MarshalAs(UnmanagedType.LPWStr)] public string lpVerb;
+        [MarshalAs(UnmanagedType.LPWStr)] public string lpFile;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpParameters;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpDirectory;
+        public int nShow;
+        public IntPtr hInstApp;
+        public IntPtr lpIDList;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpClass;
+        public IntPtr hkeyClass;
+        public uint dwHotKey;
+        public IntPtr hIcon;
+        public IntPtr hProcess;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ShellExecuteExW",
+        ExactSpelling = true, SetLastError = true)]
+    private static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO info);
+
+    /// <summary>Open the Windows file property sheet without requiring a file association.</summary>
+    public static void ShowFileProperties(Window owner, string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        var info = new SHELLEXECUTEINFO
+        {
+            cbSize = Marshal.SizeOf<SHELLEXECUTEINFO>(),
+            fMask = SEE_MASK_INVOKEIDLIST,
+            hwnd = new WindowInteropHelper(owner).Handle,
+            lpVerb = "properties",
+            lpFile = fullPath,
+            lpParameters = null,
+            lpDirectory = Path.GetDirectoryName(fullPath),
+            nShow = SW_SHOW,
+            hInstApp = IntPtr.Zero,
+            lpIDList = IntPtr.Zero,
+            lpClass = null,
+            hkeyClass = IntPtr.Zero,
+            dwHotKey = 0,
+            hIcon = IntPtr.Zero,
+            hProcess = IntPtr.Zero
+        };
+
+        if (!ShellExecuteEx(ref info))
+            throw new InvalidOperationException(
+                $"ShellExecuteEx failed with Win32 error {Marshal.GetLastWin32Error()}.");
     }
 }
 

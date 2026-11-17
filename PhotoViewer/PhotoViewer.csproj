@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Resource Include="app.ico" />
+    <Resource Include="Icons\*.png" />
   </ItemGroup>
 
   <ItemGroup>

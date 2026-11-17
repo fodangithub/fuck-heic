@@ -11,6 +11,7 @@ first-class **HEIC / HEIF / AVIF** support out of the box.
 - Zoom: mouse wheel, `+` / `-`, `1` for 100%
 - Fit-to-window: `F` (default on open, re-fits on window resize)
 - Rotate: `End` (clockwise 90°), `Home` (counter-clockwise 90°)
+- Right-click the picture for copy image/path, open containing folder, rotate, flip, print, and system file properties
 - HEIC / HEIF / AVIF decoding via a **bundled libheif** — no system HEIF extension required
 
 ## Supported formats

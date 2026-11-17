@@ -192,6 +192,29 @@ public sealed class DebugHttpService : IDisposable
                 if (get) return Json(_window.GetRenderedImageBounds());
                 break;
 
+            // Inspect / invoke the image context menu from Debug-only regression tests.
+            case "/context/info":
+                if (get) return Json(_window.GetImageContextMenuInfo());
+                break;
+            case "/context/click":
+                if (post)
+                {
+                    if (query.TryGetValue("name", out string? menuItemName) && !string.IsNullOrEmpty(menuItemName))
+                    {
+                        bool ok = _window.InvokeImageContextMenuItem(menuItemName);
+                        return Json(new { ok, info = _window.GetDebugInfo() });
+                    }
+                    return JsonError("Missing 'name' query parameter");
+                }
+                break;
+            case "/context/open":
+                if (post)
+                {
+                    _window.SetImageContextMenuOpen(Num(query, "open", 1) != 0);
+                    return Json(_window.GetDebugInfo());
+                }
+                break;
+
             case "/pan":
                 if (post) { _window.PanBy(Num(query, "dx"), Num(query, "dy")); return Json(_window.GetDebugInfo()); }
                 break;
